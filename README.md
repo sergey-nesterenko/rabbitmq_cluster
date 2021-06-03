@@ -1,1 +1,1 @@
-# rabbitmq_cluster
+# rabbitmq
