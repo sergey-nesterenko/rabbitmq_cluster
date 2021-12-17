@@ -1,0 +1,105 @@
+---
+# tasks file for rabbitmq/roles/rabbitmq
+    - name: INSTALL ERLANG .rpm
+      dnf:
+        name: https://github.com/rabbitmq/erlang-rpm/releases/download/v{{ erlang_v }}/erlang-{{ erlang_v }}-1.el8.x86_64.rpm
+        disable_gpg_check: yes
+        state: present
+        update_cache: yes
+
+    - name: ADD rabbitmq REPO
+      copy: src=rabbitmq-server.repo dest=/etc/yum.repos.d/rabbitmq-server.repo mode=0644
+
+    - name: INSTALL RabbitMQ and Tools
+      dnf:
+        name: ['socat','logrotate']
+        state: present
+        update_cache: yes
+
+    - name: INSTALL RabbitMQ
+      dnf:
+        name: rabbitmq-server
+        disablerepo: '*'
+        enablerepo: 'rabbitmq_server'
+        update_cache: yes
+        state: latest
+      register: rmq_installed
+
+    - name: Make needed dirs
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: 0775
+        owner: rabbitmq
+        group: rabbitmq
+        recurse: yes
+      with_items:
+        - /etc/rabbitmq
+        - "{{ rabbitmq_data_dir }}/mnesia"
+        - "{{ rabbitmq_log_dir }}"
+
+    - name: COPY enabled_plugins
+      copy: src=enabled_plugins dest=/etc/rabbitmq/enabled_plugins owner=rabbitmq group=rabbitmq mode=0775
+
+    - name: COPY rabbitmq.conf.j2
+      template: src=rabbitmq.conf.j2 dest=/etc/rabbitmq/rabbitmq.conf owner=rabbitmq group=rabbitmq mode=0775
+      register: rmq_configured
+
+    - name: COPY rabbitmq-env.conf.j2
+      template: src=rabbitmq-env.conf.j2 dest=/etc/rabbitmq/rabbitmq-env.conf owner=rabbitmq group=rabbitmq mode=0775
+      register: rmq_env_configured
+
+    - name: START RabbitMQ
+      service: name=rabbitmq-server state=restarted enabled=yes
+      when: rmq_installed.changed or rmq_configured.changed or rmq_env_configured.changed
+
+  
+    - name: GET cookie from Master node
+      shell: echo -n $(cat /var/lib/rabbitmq/.erlang.cookie)
+      delegate_to: "{{ hosts_group[0] }}"
+      #run_once: true
+      register: get_master_cookie
+
+    - name: GET Master node
+      shell: echo $(rabbitmqctl cluster_status |grep -i 'Cluster name'|cut -d':' -f2|cut -d' ' -f2)
+      delegate_to: "{{ hosts_group[0] }}"
+      #run_once: true
+      register: get_master_node
+
+    - block:
+       - name: WRITE same cookie from the Master to every host
+         lineinfile:
+           path: /var/lib/rabbitmq/.erlang.cookie
+           regexp: '^(.*)$'
+           line: "{{ get_master_cookie.stdout }}"
+           state: present
+         register: cookie_rewritten
+
+       - name: RESTART SLAVES
+         service: name=rabbitmq-server state=restarted enabled=yes
+         when: cookie_rewritten.changed
+
+       - name: stop_app on Slaves
+         shell: rabbitmqctl stop_app
+         when: cookie_rewritten.changed
+
+       - name: join_cluster on Slaves
+         shell: rabbitmqctl join_cluster {{ get_master_node.stdout }}
+         when: cookie_rewritten.changed
+
+       - name: start_app on Slaves
+         shell: rabbitmqctl start_app
+         when: cookie_rewritten.changed
+      when: inventory_hostname != hosts_group[0]
+
+    - name: DECLARE POLITICS
+      shell: rabbitmqctl set_policy ha-all "" '{"ha-mode":"all","ha-sync-mode":"automatic"}'
+      run_once: true
+      delegate_to: "{{ hosts_group[0] }}"
+
+    - name: GET rabbitadmin
+      get_url:
+        url: http://{{ ansible_host }}:15672/cli/rabbitmqadmin
+        dest: /usr/local/bin/
+        mode: 0775
+      when: rmq_installed.changed

@@ -1,0 +1,8 @@
+---
+# defaults file for rabbitmq/roles/rabbitmq
+  hosts_group: "{{ groups['rmq_test'] }}"
+  rabbitmq_port: 5672
+  erlang_v: 24.1.6
+  rabbitmq_data_dir: /data/rabbitmq
+  rabbitmq_log_dir: /var/log/rabbitmq
+  rabbitmq_vm_memory: 0.8

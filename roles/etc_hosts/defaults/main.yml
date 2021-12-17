@@ -1,0 +1,4 @@
+---
+# defaults file for rabbitmq/roles/etc_hosts
+   hosts_group: "{{ groups['rmq_test'] }}"
+   rabbitmq_port: 5672

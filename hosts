@@ -1,0 +1,8 @@
+[rmq_test]
+rmq1  ansible_host=10.18.8.121 hostname=vml-hq-dev-etl-worker-1
+rmq2  ansible_host=10.18.8.122 hostname=vml-hq-dev-etl-worker-2
+rmq3  ansible_host=10.18.8.45 hostname=vml-hq-dev-dkolobov-1
+rmq4  ansible_host=10.18.8.120 hostname=vml-hq-dev-etl-scheduler-1
+
+#[rmq_prod]
+#rmqp ansible_host=10.10.135.131

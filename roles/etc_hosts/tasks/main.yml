@@ -1,0 +1,10 @@
+---
+# tasks file for rabbitmq/roles/etc_hosts
+   - name: FILL /etc/hosts with Cluster nodes
+     lineinfile:
+       dest: /etc/hosts
+       line: "{{ ansible_host }} {{ ansible_hostname }} {{ ansible_hostname }}.rutube.dev"
+       state: present
+     delegate_to: "{{ item }}"
+     with_items:
+        - "{{ hosts_group }}"
